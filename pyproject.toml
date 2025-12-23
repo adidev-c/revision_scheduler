@@ -1,0 +1,11 @@
+[project]
+name = "revision-scheduler"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "black>=25.12.0",
+    "msgpack>=1.1.2",
+    "rich>=14.2.0",
+]
