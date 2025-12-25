@@ -16,19 +16,21 @@ import msgpack
 DATA_FILE = "data.bin"
 DEBUG_DATA_FILE = "data.json"
 
-#STYLES
+# STYLES
 PROCESS_NAME = "bold blue"
 PROCESS_SUCCESS = "bold green"
 PROCESS_FAILED = "bold red"
 ERROR = "bold red"
 EMPTY = "bold yellow"
+
+
 class App:
     def __init__(self, console: Console):
         self.console: Console = console
         self.delta: List[int] = [0, 1, 3, 7, 10, 21, 35, 60]  # delta for rivision
         self.topics: List[Topic] = []  # all topics
         self.last_id: int = 0  # number of topics (topic id)
-        self.tasks: List[Topic] = []  # due tasks for today
+        self.due_tasks: List[Topic] = []  # due tasks for today
         self.recycle_bin: List[Topic] = []
         self.dirty = False
 
@@ -82,8 +84,9 @@ class App:
         return topic.next_review <= date.today()
 
     def get_due_today(self) -> None:
-        self.tasks = [topic for topic in self.topics if self.is_due(topic)]
-    def get_table(self,title:str,topics:List[Topic])->Table:
+        self.due_tasks = [t for t in self.topics if self.is_due(t)]
+
+    def get_table(self, title: str, topics: List[Topic]) -> Table:
         table = Table(
             title=title,
             header_style="bold cyan",
@@ -96,26 +99,31 @@ class App:
         table.add_column("Description", ratio=5)
         table.add_column("Priority", justify="center", ratio=1)
 
-        for i,t in enumerate(topics):
+        for i, t in enumerate(topics):
             label, style = t.get_priority()
             priority_text = Text(label, style=style)
 
-            table.add_row(str(i),t.subject, t.topic, t.description, priority_text)
+            table.add_row(str(i), t.subject, t.topic, t.description, priority_text)
         return table
+
     def list_revision_task(self) -> None:
         "lists the pending tasks(topics) for today as a table"
-        if len(self.tasks) == 0:
-            self.console.print(f"[{PROCESS_SUCCESS}]Nothing due today. Good work.[/{PROCESS_SUCCESS}]")
+        if len(self.due_tasks) == 0:
+            self.console.print(
+                f"[{PROCESS_SUCCESS}]Nothing due today. Good work.[/{PROCESS_SUCCESS}]"
+            )
             return
-        table = self.get_table(title="Today's Revision Report",topics=self.tasks)
+        table = self.get_table(title="Today's Revision Report", topics=self.due_tasks)
         self.console.print(table)
 
     def list_revision_topics(self, topics: List[Topic]) -> bool:
         "lists the pending tasks(topics) for today as a panel"
         if len(topics) == 0:
-            self.console.print(f"[{PROCESS_SUCCESS}]Nothing due today. Good work.[/{PROCESS_SUCCESS}]")
+            self.console.print(
+                f"[{PROCESS_SUCCESS}]Nothing due today. Good work.[/{PROCESS_SUCCESS}]"
+            )
             return False  # False -> tasks empty
-        table = self.get_table("Revision list",self.tasks)
+        table = self.get_table("Revision list", topics=topics)
         self.console.print(table)
         return True
 
@@ -133,21 +141,21 @@ class App:
             text += "\n"
         return text
 
-    def list_topics(self, title:str,topics: List[Topic])->bool:
-        if len(topics)==0:
-            self.console.print("Empty",style=EMPTY)
+    def list_topics(self, title: str, topics: List[Topic]) -> bool:
+        if len(topics) == 0:
+            self.console.print("Empty", style=EMPTY)
             return False
-        table = self.get_table(title=title,topics=topics)
+        table = self.get_table(title=title, topics=topics)
         with self.console.pager():
             self.console.print(table)
         return True
 
     # GET DETAILS
     def get_details(self):
-        if not self.list_revision_topics(self.topics):
+        if not self.list_revision_topics(self.due_tasks):
             return
         choice = int(Prompt.ask(prompt="Select topic"))
-        topic = self.tasks[choice]
+        topic = self.due_tasks[choice]
         self.console.clear()
         self.details(topic=topic)
 
@@ -176,10 +184,10 @@ class App:
     # REVISE
     def revice(self):
         self.console.clear()
-        if not self.list_revision_topics(self.tasks):
+        if not self.list_revision_topics(self.due_tasks):
             return
         choice = self.ask_choice("Select topic")
-        topic = self.tasks[choice]
+        topic = self.due_tasks[choice]
         revision = Revision(console=console, revision_delta=self.delta, topic=topic)
         revision.start()
         self.dirty = True
@@ -187,21 +195,20 @@ class App:
 
     # ALL TOPICS
     def list_all(self):
-        self.list_topics("Topics",self.topics)
+        self.list_topics("Topics", self.topics)
 
     # REMOVE TOPIC
     def remove_topic(self, index, hard=False):
         topic: Topic = self.topics.pop(index)
-        if hard:
-            return
-        self.recycle_bin.append(topic)
+        if not hard:
+            self.recycle_bin.append(topic)
         self.get_due_today()
         self.dirty = True
-        self.console.print("Topic removed",style=PROCESS_SUCCESS)
+        self.console.print("Topic removed", style=PROCESS_SUCCESS)
 
     def remove_topic_prompt(self):
         self.list_all()
-        self.console.print("Topic removal",style=PROCESS_NAME)
+        self.console.print("Topic removal", style=PROCESS_NAME)
         index = int(Prompt.ask("Index"))
         intensity = Prompt.ask(
             "Intensity h -> hard (no recovary), s -> soft (can be recovered)",
@@ -216,43 +223,49 @@ class App:
         self.topics.append(topic)
         self.get_due_today()
         self.dirty = True
-        self.console.print("Topic recovered",style=PROCESS_SUCCESS)
+        self.console.print("Topic recovered", style=PROCESS_SUCCESS)
 
     def recover_topic_prompt(self):
-        if not self.list_topics("Recycle bin",self.recycle_bin):
+        if not self.list_topics("Recycle bin", self.recycle_bin):
             return
-        self.console.print("Topic recovary",style=PROCESS_NAME)
+        self.console.print("Topic recovary", style=PROCESS_NAME)
         index = int(Prompt.ask("Index"))
         self.recover_topic(index)
 
     # NEW TASK
-    def new_task(self,index:int):
+    def new_task(self, index: int):
         topic = self.topics[index]
-        if topic in self.tasks:
-            self.console.print("Task already exists",style=PROCESS_SUCCESS)
+        if topic in self.due_tasks:
+            self.console.print("Task already exists", style=PROCESS_SUCCESS)
             return
-        self.tasks.append(topic)
+        topic.next_review = date.today()
         self.get_due_today()
         self.dirty = True
-        self.console.print("New task added",style=PROCESS_SUCCESS)
+        self.console.print("New task added", style=PROCESS_SUCCESS)
+
     def new_task_prompt(self):
-        if not self.list_topics("Available topics",self.topics):
+        if not self.list_topics("Available topics", self.topics):
             return
-        self.console.print("New task addition",style=PROCESS_NAME)
+        self.console.print("New task addition", style=PROCESS_NAME)
         index = int(Prompt.ask("Index"))
         self.new_task(index)
+
     def show_menu(self, options: List[str], title: str):
         menu_text = "\n".join(
-            f"[bold cyan]{i+1}[/bold cyan]. {opt}" for i, opt in enumerate(options)
+            f"[bold cyan]{i}[/bold cyan]. {opt}" for i, opt in enumerate(options)
         )
         self.console.print(Panel(menu_text, title=title))
 
     def ask_choice(self, prompt=">>") -> int:
         while True:
-            choice = Prompt.ask(prompt)
-            if choice.strip() == "":
-                continue 
-            return int(choice)
+            try:
+                choice = Prompt.ask(prompt)
+                if choice.strip()=="":
+                    continue
+                return int(choice)
+            except ValueError:
+                self.console.print("Enter a number", style=ERROR)
+
 
     def menu(self) -> None:
         while True:
@@ -276,26 +289,24 @@ class App:
                     choice = self.ask_choice()
                     match choice:
                         case 0:
-                            continue
-                        case 1:
                             self.list_revision_task()
-                        case 2:
+                        case 1:
                             self.revice()
-                        case 3:
+                        case 2:
                             self.get_details()
-                        case 4:
+                        case 3:
                             self.new_topic()
-                        case 5:
+                        case 4:
                             self.new_task_prompt()
-                        case 6:
+                        case 5:
                             self.list_all()
-                        case 7:
+                        case 6:
                             self.remove_topic_prompt()
-                        case 8:
+                        case 7:
                             self.recover_topic_prompt()
+                        case 8:
+                            self.list_topics("Recycle bin", self.recycle_bin)
                         case 9:
-                            self.list_topics("Recycle bin",self.recycle_bin)
-                        case 10:
                             self.save()
                             return
                         case _:
@@ -310,7 +321,7 @@ class App:
                     return
 
     def new_topic(self):
-        self.console.print("New topic",style=PROCESS_NAME)
+        self.console.print("New topic", style=PROCESS_NAME)
         subject = Prompt.ask("Subject")
         topic_name = Prompt.ask("Topic")
         description = self.get_multiline("Description")
@@ -327,7 +338,7 @@ class App:
         self.last_id += 1
         self.get_due_today()
         self.dirty = True
-        self.console.print("Topic added",style=PROCESS_SUCCESS)
+        self.console.print("Topic added", style=PROCESS_SUCCESS)
 
 
 if __name__ == "__main__":

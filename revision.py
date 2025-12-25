@@ -17,12 +17,19 @@ class Revision:
 
     def show_menu(self, options: List[str], title: str):
         menu_text = "\n".join(
-            f"[bold cyan]{i+1}[/bold cyan]. {opt}" for i, opt in enumerate(options)
+            f"[bold cyan]{i}[/bold cyan]. {opt}" for i, opt in enumerate(options)
         )
         self.console.print(Panel(menu_text, title=title))
 
     def ask_choice(self, prompt=">>") -> int:
-        return int(Prompt.ask(prompt))
+        while True:
+            try:
+                choice = Prompt.ask(prompt)
+                if choice.strip()=="":
+                    continue
+                return int(choice)
+            except ValueError:
+                self.console.print("Enter a number", style="bold red")
 
     def sync_topic(self):
         self.virtual_topic.revisions += 1
@@ -83,17 +90,17 @@ class Revision:
                 try:
                     choice = self.ask_choice()
                     match choice:
-                        case 1:
+                        case 0:
                             self.show_comments()
-                        case 2:
+                        case 1:
                             self.add_comment()
-                        case 3:
+                        case 2:
                             self.remove_comment()
-                        case 4:
+                        case 3:
                             self.clear_all_comments()
-                        case 5:
+                        case 4:
                             self.restore_comments()
-                        case 6:
+                        case 5:
                             return
                         case _:
                             self.console.print("Invalid choice", style="red")
@@ -157,17 +164,17 @@ class Revision:
                 try:
                     choice = self.ask_choice()
                     match choice:
-                        case 1:
+                        case 0:
                             self.show_mistakes()
-                        case 2:
+                        case 1:
                             self.add_mistake()
-                        case 3:
+                        case 2:
                             self.remove_mistake()
-                        case 4:
+                        case 3:
                             self.clear_all_mistakes()
-                        case 5:
+                        case 4:
                             self.restore_mistakes()
-                        case 6:
+                        case 5:
                             return
                         case _:
                             self.console.print("Invalid choice", style="red")
@@ -249,20 +256,20 @@ class Revision:
                 try:
                     choice = self.ask_choice()
                     match choice:
-                        case 1:
+                        case 0:
                             self.edit_comments()
-                        case 2:
+                        case 1:
                             self.edit_mistakes()
-                        case 3:
+                        case 2:
                             self.score_topic()
-                        case 4:
+                        case 3:
                             self.show_topic()
-                        case 5:
+                        case 4:
                             self.restore_edited_topic()
-                        case 6:
+                        case 5:
                             self.sync_topic()
                             return
-                        case 7:
+                        case 6:
                             if not self.bool_prompt("Exit the editor without saving?"):
                                 continue
                             self.restore_topic()
