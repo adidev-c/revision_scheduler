@@ -25,7 +25,7 @@ class Revision:
         return int(Prompt.ask(prompt))
 
     def sync_topic(self):
-        self.virtual_topic.revisions+=1
+        self.virtual_topic.revisions += 1
         self.topic.revisions = self.virtual_topic.revisions
         idx = min(self.virtual_topic.revisions, len(self.delta) - 1)
         days = self.delta[idx]
@@ -44,30 +44,17 @@ class Revision:
             self.virtual_topic.details()
         )
         #  HEADER
-        self.console.print(Panel(header_text, expand=True))
+        self.console.print(header_text)
 
         #  DESCRIPTION
 
-        self.console.print(
-            Panel(
-                desc,
-                title="Description",
-                border_style="blue",
-                expand=True,
-            )
-        )
+        self.console.print(desc)
 
         #  METADATA TABLE
 
-        self.console.print(
-            Panel(
-                meta,
-                title="Revision Stats",
-                border_style="green",
-                expand=False,
-            )
-        )
+        self.console.print(meta)
 
+        # MISTAKES
         self.console.print(mistakes_panel)
 
         #  COMMENTS
@@ -117,7 +104,9 @@ class Revision:
                 except Exception as e:
                     self.console.print(f"Error : {e}", style="bold red")
                 except KeyboardInterrupt:
-                    if self.bool_prompt("Quit without saving comments?""Quit without saving comments?"):
+                    if self.bool_prompt(
+                        "Quit without saving comments?" "Quit without saving comments?"
+                    ):
                         return
                     continue
 
@@ -189,9 +178,7 @@ class Revision:
                 except Exception as e:
                     self.console.print(f"Error : {e}", style="bold red")
                 except KeyboardInterrupt:
-                    quit = self.bool_prompt(
-                        "Quit without saving mistakes?"
-                    )
+                    quit = self.bool_prompt("Quit without saving mistakes?")
                     if quit:
                         return
                     continue

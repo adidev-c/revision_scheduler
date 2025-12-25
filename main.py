@@ -3,7 +3,6 @@ from rich.panel import Panel
 from rich.prompt import Prompt
 from rich.table import Table
 from rich.text import Text
-from rich.align import Align
 from rich.rule import Rule
 from revision import Revision
 from os import listdir
@@ -34,21 +33,27 @@ class App:
         self.menu()
 
     def save(self):
-        if not app.dirty:
+        if not self.dirty:
             return
         data = {}
         topics: List[Topic] = [topic.to_dict() for topic in self.topics]
         data["topics"] = topics  #  topics list
         data["last_id"] = self.last_id  # stores the latest id counter
-        json.dump(data, open(DEBUG_DATA_FILE, "w"), indent=4)  # dump json for debug
-        msgpack.dump(data, open(DATA_FILE, "wb"))
+        with open(DATA_FILE, "wb") as file:
+            msgpack.dump(data, file)
+            file.close()
+        with open(DEBUG_DATA_FILE, "w") as f:
+            json.dump(data, f, indent=4)  # dump json for debug
+            f.close()
         self.dirty = False
 
     def load_data(self):
         try:
             self.last_id = 0
             self.topics.clear()
-            data = msgpack.load(open(DATA_FILE, "rb"))
+            with open(DATA_FILE, "rb") as f:
+                data = msgpack.load(f)
+                f.close()
             topics = data["topics"]
             self.last_id = data["last_id"]  # geting the id counter
             for t in topics:
@@ -56,7 +61,7 @@ class App:
                 topic.from_dict(t)
                 self.topics.append(topic)
         except Exception as e:
-            self.self.console.print(f"Error : {e}", style="bold red")
+            self.console.print(f"Error : {e}", style="bold red")
 
     def is_due(self, topic: Topic) -> bool:
         return topic.next_review <= date.today()
@@ -87,16 +92,17 @@ class App:
             table.add_row(t.subject, t.topic, t.description, priority_text)
         self.console.print(table)
 
-    def list_revision_topics(self, topics: List[Topic]) -> None:
+    def list_revision_topics(self, topics: List[Topic]) -> bool:
         "lists the pending tasks(topics) for today as a panel"
         if len(topics) == 0:
             self.console.print("[bold green]Nothing due today. Good work.[/bold green]")
-            return
+            return False # False -> tasks empty
         rev_list = "\n".join(
             f"[bold cyan]{i}[/bold cyan]. {t.topic} - {t.subject}"
             for i, t in enumerate(topics)
         )
         self.console.print(Panel(rev_list, title="Topics"))
+        return True
 
     def get_multiline(self, message: str) -> str:
         "gets multiline input for fields such as description"
@@ -114,7 +120,8 @@ class App:
 
     # GET DETAILS
     def get_details(self):
-        self.list_revision_topics(self.tasks)
+        if not self.list_revision_topics(self.tasks):
+            return
         choice = int(Prompt.ask(prompt="Select topic"))
         topic = self.tasks[choice]
         self.console.clear()
@@ -123,30 +130,17 @@ class App:
     def details(self, topic: Topic):
         header_text, desc, meta, mistakes_panel, comments_panel = topic.details()
         #  HEADER
-        self.console.print(Panel(header_text, expand=True))
+        self.console.print(header_text)
 
         #  DESCRIPTION
 
-        self.console.print(
-            Panel(
-                desc,
-                title="Description",
-                border_style="blue",
-                expand=True,
-            )
-        )
+        self.console.print(desc)
 
         #  METADATA TABLE
 
-        self.console.print(
-            Panel(
-                meta,
-                title="Revision Stats",
-                border_style="green",
-                expand=False,
-            )
-        )
+        self.console.print(meta)
 
+        # MISTAKES
         self.console.print(mistakes_panel)
 
         #  COMMENTS
@@ -158,13 +152,22 @@ class App:
     # REVISE
     def revice(self):
         self.console.clear()
-        self.list_revision_topics(self.tasks)
+        if not self.list_revision_topics(self.tasks):
+            return
         choice = self.ask_choice("Select topic")
         topic = self.tasks[choice]
         revision = Revision(console=console, revision_delta=self.delta, topic=topic)
         revision.start()
         self.dirty = True
         self.get_due_today()
+
+    # ALL TOPICS
+    def list_all(self):
+        text = "\n".join(
+            f"{i}. {t.topic} - {t.subject}" for i, t in enumerate(self.topics)
+        )
+        with self.console.pager():
+            self.console.print(text)
 
     def show_menu(self, options: List[str], title: str):
         menu_text = "\n".join(
@@ -183,6 +186,7 @@ class App:
                     "Complete task",
                     "Get details",
                     "Add new topic",
+                    "View all topics",
                     "Exit",
                 ],
                 title="Main Menu",
@@ -200,6 +204,8 @@ class App:
                         case 4:
                             self.new_topic()
                         case 5:
+                            self.list_all()
+                        case 6:
                             self.save()
                             return
                         case _:

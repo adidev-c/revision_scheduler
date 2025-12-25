@@ -1,10 +1,8 @@
-from datetime import date, timedelta
+from datetime import date
 from typing import List, Optional
 from rich.text import Text
 from rich.panel import Panel
 from rich.table import Table
-from rich.rule import Rule
-
 
 class Topic:
     def __init__(
@@ -70,21 +68,13 @@ class Topic:
 
     def details(self):
         #  HEADER
-        header_text = Text()
-        header_text.append(f"{self.subject}", style="bold cyan")
-        header_text.append("  -  ")
-        header_text.append(f"{self.topic}", style="bold white")
-        header_text.append(f"\nTopic ID: {self.id}", style="dim")
+        header_text = self.get_header_panel()
 
         #  DESCRIPTION
-        desc = self.description.strip() or "No description provided."
+        desc = self.get_description_panel()
 
         #  METADATA TABLE
-        meta = Table(show_header=False, box=None)
-        meta.add_row("Revisions", str(self.revisions))
-        meta.add_row("Last Review", self.last_review.isoformat())
-        meta.add_row("Next Review", self.next_review.isoformat())
-        meta.add_row("Score", str(self.score))
+        meta = self.get_meta_table()
 
         #  MISTAKES
         mistakes_panel = self.get_mistakes_panel()
@@ -119,6 +109,37 @@ class Topic:
             title="Mistakes",
             border_style="red",
             expand=True,
+        )
+
+    def get_description_panel(self):
+        desc = self.description.strip() or "No description provided."
+
+        return Panel(
+            desc,
+            title="Description",
+            border_style="blue",
+            expand=True,
+        )
+
+    def get_header_panel(self):
+        header_text = Text()
+        header_text.append(f"{self.subject}", style="bold cyan")
+        header_text.append("  -  ")
+        header_text.append(f"{self.topic}", style="bold white")
+        header_text.append(f"\nTopic ID: {self.id}", style="dim")
+        return Panel(header_text, expand=True)
+
+    def get_meta_table(self):
+        meta = Table(show_header=False, box=None)
+        meta.add_row("Revisions", str(self.revisions))
+        meta.add_row("Last Review", self.last_review.isoformat())
+        meta.add_row("Next Review", self.next_review.isoformat())
+        meta.add_row("Score", str(self.score))
+        return Panel(
+            meta,
+            title="Revision Stats",
+            border_style="green",
+            expand=False,
         )
 
     def clone(self) -> Topic:
