@@ -21,6 +21,7 @@ PROCESS_NAME = "bold blue"
 PROCESS_SUCCESS = "bold green"
 PROCESS_FAILED = "bold red"
 ERROR = "bold red"
+EMPTY = "bold yellow"
 class App:
     def __init__(self, console: Console):
         self.console: Console = console
@@ -82,28 +83,31 @@ class App:
 
     def get_due_today(self) -> None:
         self.tasks = [topic for topic in self.topics if self.is_due(topic)]
-
-    def list_revision_task(self, topics: List[Topic]) -> None:
-        "lists the pending tasks(topics) for today as a table"
-        if len(topics) == 0:
-            self.console.print(f"[{PROCESS_SUCCESS}]Nothing due today. Good work.[/{PROCESS_SUCCESS}]")
-            return
+    def get_table(self,title:str,topics:List[Topic])->Table:
         table = Table(
-            title="Today's Revision Report",
+            title=title,
             header_style="bold cyan",
             show_lines=True,
             expand=True,
         )
+        table.add_column("Index", style="bold", ratio=1)
         table.add_column("Subject", style="bold", ratio=2)
         table.add_column("Topic", style="bold", ratio=2)
         table.add_column("Description", ratio=5)
         table.add_column("Priority", justify="center", ratio=1)
 
-        for t in topics:
+        for i,t in enumerate(topics):
             label, style = t.get_priority()
             priority_text = Text(label, style=style)
 
-            table.add_row(t.subject, t.topic, t.description, priority_text)
+            table.add_row(str(i),t.subject, t.topic, t.description, priority_text)
+        return table
+    def list_revision_task(self) -> None:
+        "lists the pending tasks(topics) for today as a table"
+        if len(self.tasks) == 0:
+            self.console.print(f"[{PROCESS_SUCCESS}]Nothing due today. Good work.[/{PROCESS_SUCCESS}]")
+            return
+        table = self.get_table(title="Today's Revision Report",topics=self.tasks)
         self.console.print(table)
 
     def list_revision_topics(self, topics: List[Topic]) -> bool:
@@ -111,11 +115,8 @@ class App:
         if len(topics) == 0:
             self.console.print(f"[{PROCESS_SUCCESS}]Nothing due today. Good work.[/{PROCESS_SUCCESS}]")
             return False  # False -> tasks empty
-        rev_list = "\n".join(
-            f"[bold cyan]{i}[/bold cyan]. {t.topic} - {t.subject}"
-            for i, t in enumerate(topics)
-        )
-        self.console.print(Panel(rev_list, title="Topics"))
+        table = self.get_table("Revision list",self.tasks)
+        self.console.print(table)
         return True
 
     def get_multiline(self, message: str) -> str:
@@ -132,14 +133,18 @@ class App:
             text += "\n"
         return text
 
-    def list_topics(self, topics: List[Topic]):
-        text = "\n".join(f"{i}. {t.topic} - {t.subject}" for i, t in enumerate(topics))
+    def list_topics(self, title:str,topics: List[Topic])->bool:
+        if len(topics)==0:
+            self.console.print("Empty",style=EMPTY)
+            return False
+        table = self.get_table(title=title,topics=topics)
         with self.console.pager():
-            self.console.print(text)
+            self.console.print(table)
+        return True
 
     # GET DETAILS
     def get_details(self):
-        if not self.list_revision_topics(self.tasks):
+        if not self.list_revision_topics(self.topics):
             return
         choice = int(Prompt.ask(prompt="Select topic"))
         topic = self.tasks[choice]
@@ -182,7 +187,7 @@ class App:
 
     # ALL TOPICS
     def list_all(self):
-        self.list_topics(self.topics)
+        self.list_topics("Topics",self.topics)
 
     # REMOVE TOPIC
     def remove_topic(self, index, hard=False):
@@ -214,7 +219,8 @@ class App:
         self.console.print("Topic recovered",style=PROCESS_SUCCESS)
 
     def recover_topic_prompt(self):
-        self.list_topics(self.recycle_bin)
+        if not self.list_topics("Recycle bin",self.recycle_bin):
+            return
         self.console.print("Topic recovary",style=PROCESS_NAME)
         index = int(Prompt.ask("Index"))
         self.recover_topic(index)
@@ -230,7 +236,8 @@ class App:
         self.dirty = True
         self.console.print("New task added",style=PROCESS_SUCCESS)
     def new_task_prompt(self):
-        self.list_topics(self.topics)
+        if not self.list_topics("Available topics",self.topics):
+            return
         self.console.print("New task addition",style=PROCESS_NAME)
         index = int(Prompt.ask("Index"))
         self.new_task(index)
@@ -241,7 +248,11 @@ class App:
         self.console.print(Panel(menu_text, title=title))
 
     def ask_choice(self, prompt=">>") -> int:
-        return int(Prompt.ask(prompt))
+        while True:
+            choice = Prompt.ask(prompt)
+            if choice.strip() == "":
+                continue 
+            return int(choice)
 
     def menu(self) -> None:
         while True:
@@ -251,7 +262,7 @@ class App:
                     "Complete task",
                     "Get details",
                     "Add new topic",
-                    "Add new task",
+                    "Add new revision task",
                     "View all topics",
                     "Remove topics",
                     "Recover topics",
@@ -264,8 +275,10 @@ class App:
                 try:
                     choice = self.ask_choice()
                     match choice:
+                        case 0:
+                            continue
                         case 1:
-                            self.list_revision_task(self.tasks)
+                            self.list_revision_task()
                         case 2:
                             self.revice()
                         case 3:
@@ -281,7 +294,7 @@ class App:
                         case 8:
                             self.recover_topic_prompt()
                         case 9:
-                            self.list_topics(self.recycle_bin)
+                            self.list_topics("Recycle bin",self.recycle_bin)
                         case 10:
                             self.save()
                             return
