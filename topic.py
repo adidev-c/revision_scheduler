@@ -4,6 +4,7 @@ from rich.text import Text
 from rich.panel import Panel
 from rich.table import Table
 
+
 class Topic:
     def __init__(
         self,

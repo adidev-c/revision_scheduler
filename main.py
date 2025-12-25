@@ -16,14 +16,19 @@ import msgpack
 DATA_FILE = "data.bin"
 DEBUG_DATA_FILE = "data.json"
 
-
+#STYLES
+PROCESS_NAME = "bold blue"
+PROCESS_SUCCESS = "bold green"
+PROCESS_FAILED = "bold red"
+ERROR = "bold red"
 class App:
     def __init__(self, console: Console):
         self.console: Console = console
-        self.delta = [0, 1, 3, 7, 10, 21, 35, 60]  # delta for rivision
+        self.delta: List[int] = [0, 1, 3, 7, 10, 21, 35, 60]  # delta for rivision
         self.topics: List[Topic] = []  # all topics
-        self.last_id = 0  # number of topics (topic id)
-        self.tasks = []  # due tasks for today
+        self.last_id: int = 0  # number of topics (topic id)
+        self.tasks: List[Topic] = []  # due tasks for today
+        self.recycle_bin: List[Topic] = []
         self.dirty = False
 
     def run(self):
@@ -37,7 +42,9 @@ class App:
             return
         data = {}
         topics: List[Topic] = [topic.to_dict() for topic in self.topics]
+        recycle_bin: List[Topic] = [topic.to_dict() for topic in self.recycle_bin]
         data["topics"] = topics  #  topics list
+        data["recycle_bin"] = recycle_bin
         data["last_id"] = self.last_id  # stores the latest id counter
         with open(DATA_FILE, "wb") as file:
             msgpack.dump(data, file)
@@ -55,13 +62,20 @@ class App:
                 data = msgpack.load(f)
                 f.close()
             topics = data["topics"]
+            recycle_bin = data["recycle_bin"]
             self.last_id = data["last_id"]  # geting the id counter
+
             for t in topics:
                 topic = Topic()
                 topic.from_dict(t)
                 self.topics.append(topic)
+
+            for t in recycle_bin:
+                topic = Topic()
+                topic.from_dict(t)
+                self.recycle_bin.append(topic)
         except Exception as e:
-            self.console.print(f"Error : {e}", style="bold red")
+            self.console.print(f"Error : {e}", style=ERROR)
 
     def is_due(self, topic: Topic) -> bool:
         return topic.next_review <= date.today()
@@ -72,7 +86,7 @@ class App:
     def list_revision_task(self, topics: List[Topic]) -> None:
         "lists the pending tasks(topics) for today as a table"
         if len(topics) == 0:
-            self.console.print("[bold green]Nothing due today. Good work.[/bold green]")
+            self.console.print(f"[{PROCESS_SUCCESS}]Nothing due today. Good work.[/{PROCESS_SUCCESS}]")
             return
         table = Table(
             title="Today's Revision Report",
@@ -95,8 +109,8 @@ class App:
     def list_revision_topics(self, topics: List[Topic]) -> bool:
         "lists the pending tasks(topics) for today as a panel"
         if len(topics) == 0:
-            self.console.print("[bold green]Nothing due today. Good work.[/bold green]")
-            return False # False -> tasks empty
+            self.console.print(f"[{PROCESS_SUCCESS}]Nothing due today. Good work.[/{PROCESS_SUCCESS}]")
+            return False  # False -> tasks empty
         rev_list = "\n".join(
             f"[bold cyan]{i}[/bold cyan]. {t.topic} - {t.subject}"
             for i, t in enumerate(topics)
@@ -111,12 +125,17 @@ class App:
 
         text = ""
         while True:
-            data = self.console.input("")
+            data = self.console.input()
             if data == "end":
                 break
             text += data
             text += "\n"
         return text
+
+    def list_topics(self, topics: List[Topic]):
+        text = "\n".join(f"{i}. {t.topic} - {t.subject}" for i, t in enumerate(topics))
+        with self.console.pager():
+            self.console.print(text)
 
     # GET DETAILS
     def get_details(self):
@@ -163,12 +182,58 @@ class App:
 
     # ALL TOPICS
     def list_all(self):
-        text = "\n".join(
-            f"{i}. {t.topic} - {t.subject}" for i, t in enumerate(self.topics)
-        )
-        with self.console.pager():
-            self.console.print(text)
+        self.list_topics(self.topics)
 
+    # REMOVE TOPIC
+    def remove_topic(self, index, hard=False):
+        topic: Topic = self.topics.pop(index)
+        if hard:
+            return
+        self.recycle_bin.append(topic)
+        self.get_due_today()
+        self.dirty = True
+        self.console.print("Topic removed",style=PROCESS_SUCCESS)
+
+    def remove_topic_prompt(self):
+        self.list_all()
+        self.console.print("Topic removal",style=PROCESS_NAME)
+        index = int(Prompt.ask("Index"))
+        intensity = Prompt.ask(
+            "Intensity h -> hard (no recovary), s -> soft (can be recovered)",
+            choices=["h", "s"],
+            default="s",
+        )
+        self.remove_topic(index, intensity == "h")
+
+    # RECOVER TOPIC
+    def recover_topic(self, index: int):
+        topic: Topic = self.recycle_bin.pop(index)
+        self.topics.append(topic)
+        self.get_due_today()
+        self.dirty = True
+        self.console.print("Topic recovered",style=PROCESS_SUCCESS)
+
+    def recover_topic_prompt(self):
+        self.list_topics(self.recycle_bin)
+        self.console.print("Topic recovary",style=PROCESS_NAME)
+        index = int(Prompt.ask("Index"))
+        self.recover_topic(index)
+
+    # NEW TASK
+    def new_task(self,index:int):
+        topic = self.topics[index]
+        if topic in self.tasks:
+            self.console.print("Task already exists",style=PROCESS_SUCCESS)
+            return
+        self.tasks.append(topic)
+        self.get_due_today()
+        self.dirty = True
+        self.console.print("New task added",style=PROCESS_SUCCESS)
+    def new_task_prompt(self):
+        self.list_topics(self.topics)
+        self.console.print("New task addition",style=PROCESS_NAME)
+        index = int(Prompt.ask("Index"))
+        self.new_task(index)
     def show_menu(self, options: List[str], title: str):
         menu_text = "\n".join(
             f"[bold cyan]{i+1}[/bold cyan]. {opt}" for i, opt in enumerate(options)
@@ -186,7 +251,11 @@ class App:
                     "Complete task",
                     "Get details",
                     "Add new topic",
+                    "Add new task",
                     "View all topics",
+                    "Remove topics",
+                    "Recover topics",
+                    "View recycle bin",
                     "Exit",
                 ],
                 title="Main Menu",
@@ -204,8 +273,16 @@ class App:
                         case 4:
                             self.new_topic()
                         case 5:
-                            self.list_all()
+                            self.new_task_prompt()
                         case 6:
+                            self.list_all()
+                        case 7:
+                            self.remove_topic_prompt()
+                        case 8:
+                            self.recover_topic_prompt()
+                        case 9:
+                            self.list_topics(self.recycle_bin)
+                        case 10:
                             self.save()
                             return
                         case _:
@@ -215,11 +292,12 @@ class App:
                     self.console.clear()
                     break
                 except Exception as e:
-                    self.console.print(f"Error : {e}", style="bold red")
+                    self.console.print(f"Error : {e}", style=ERROR)
                 except KeyboardInterrupt:
                     return
 
     def new_topic(self):
+        self.console.print("New topic",style=PROCESS_NAME)
         subject = Prompt.ask("Subject")
         topic_name = Prompt.ask("Topic")
         description = self.get_multiline("Description")
@@ -236,6 +314,7 @@ class App:
         self.last_id += 1
         self.get_due_today()
         self.dirty = True
+        self.console.print("Topic added",style=PROCESS_SUCCESS)
 
 
 if __name__ == "__main__":
